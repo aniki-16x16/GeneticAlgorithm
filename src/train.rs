@@ -48,21 +48,28 @@ where
         let mut fitness_list = vec![];
         let mut rng = rand::thread_rng();
         let population = self.population;
-        let mut individuals = (0..population).map(|_| DNA::random()).collect::<Vec<_>>();
+        // Vec<(DNA, ID标识)>
+        let mut individuals = (0..population)
+            .map(|_| (DNA::random(), rng.gen::<f64>()))
+            .collect::<Vec<_>>();
 
         for epoch in 0..epoches {
+            // 初始化fitness_list，保存所有个体的适应度信息
+            // 按照fitness从高到低进行排序，然后淘汰掉部分个体
             fitness_list.clear();
-            for (i, individual) in individuals.iter().enumerate() {
+            for (i, (individual, _)) in individuals.iter().enumerate() {
                 let (x, y) = individual.get_value(self.domain);
                 let fitness = (self.target_func)(x, y);
                 if fitness > 0. {
+                    // fitness_list排序过后顺序与individuals不一致
+                    // 保存i索引，方便找到对应的individual
                     fitness_list.push((i, fitness));
                 }
             }
+            fitness_list.sort_by(|a, b| b.1.partial_cmp(&a.1).expect("NaN"));
             for _ in 0..(fitness_list.len() as f64 * self.obsolete_rate) as usize {
                 fitness_list.pop();
             }
-            fitness_list.sort_by(|a, b| b.1.partial_cmp(&a.1).expect("NaN"));
             println!(
                 "{}th eopch({}%): {}",
                 epoch + 1,
@@ -70,7 +77,7 @@ where
                 fitness_list[0].1
             );
 
-            // 按照fitness生成概率表，然后依照概率挑选下一轮个体
+            // 按照fitness累加并除以总和生成概率表，然后依照概率挑选下一轮个体
             let total_socre = fitness_list.iter().fold(0., |acc, (_, x)| acc + x);
             let mut picked_rates = vec![];
             fitness_list.iter().fold(0., |acc, (_, x)| {
@@ -88,23 +95,43 @@ where
                 }
             }
 
-            // 交换DNA，执行变异操作，本轮的最优个体不参与交换
+            // 交换DNA，执行变异操作
             for i in 0..(population / 2) {
-                let mut fragment = new_individuals[i * 2 + 1]
-                    .get_fragment(rng.gen_range(1..CHRO_LEN), Dimension::X);
-                fragment = new_individuals[i * 2].exchange(fragment, Dimension::X);
-                new_individuals[i * 2 + 1].exchange(fragment, Dimension::X);
-                fragment = new_individuals[i * 2 + 1]
-                    .get_fragment(rng.gen_range(1..CHRO_LEN), Dimension::Y);
-                fragment = new_individuals[i * 2].exchange(fragment, Dimension::Y);
-                new_individuals[i * 2 + 1].exchange(fragment, Dimension::Y);
+                // 如果执行交叉操作的是两个相同的DNA，则以变异操作取代
+                if new_individuals[i * 2].1 == new_individuals[i * 2 + 1].1 {
+                    new_individuals[i * 2]
+                        .0
+                        .mutate((rng.gen_range(0..CHRO_LEN), rng.gen_range(0..CHRO_LEN)));
+                    new_individuals[i * 2].1 = rng.gen();
+                    new_individuals[i * 2 + 1]
+                        .0
+                        .mutate((rng.gen_range(0..CHRO_LEN), rng.gen_range(0..CHRO_LEN)));
+                    new_individuals[i * 2 + 1].1 = rng.gen();
+                } else {
+                    let mut fragment = new_individuals[i * 2 + 1]
+                        .0
+                        .get_fragment(rng.gen_range(1..CHRO_LEN), Dimension::X);
+                    fragment = new_individuals[i * 2].0.exchange(fragment, Dimension::X);
+                    new_individuals[i * 2 + 1]
+                        .0
+                        .exchange(fragment, Dimension::X);
+                    fragment = new_individuals[i * 2 + 1]
+                        .0
+                        .get_fragment(rng.gen_range(1..CHRO_LEN), Dimension::Y);
+                    fragment = new_individuals[i * 2].0.exchange(fragment, Dimension::Y);
+                    new_individuals[i * 2 + 1]
+                        .0
+                        .exchange(fragment, Dimension::Y);
+                }
             }
             for i in 0..population {
                 if rng.gen::<f64>() <= self.mutation_rate {
                     new_individuals[i]
+                        .0
                         .mutate((rng.gen_range(0..CHRO_LEN), rng.gen_range(0..CHRO_LEN)))
                 }
             }
+            // 本轮最优个体保持不变
             new_individuals.pop();
             new_individuals.insert(0, individuals[fitness_list[0].0].clone());
             individuals = new_individuals;
@@ -112,7 +139,7 @@ where
 
         println!(
             "best individual: {:?} => {}",
-            individuals[fitness_list[0].0].get_value(self.domain),
+            individuals[fitness_list[0].0].0.get_value(self.domain),
             fitness_list[0].1
         );
     }

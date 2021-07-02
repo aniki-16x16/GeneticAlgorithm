@@ -9,7 +9,7 @@ const DOMAIN: ((f64, f64), (f64, f64)) = ((-consts::PI, consts::PI), (-consts::P
 fn main() {
     println!("find the maximum of");
     println!("z(x, y) = sin(π * x^2) - cos(π * y^2 - x) + x^2 * y - y^2 * x");
-    println!("x ∈ [-π, π]; y ∈ [-π, π]");
+    println!("x ∈ [-π, π]; y ∈ [-π, π]\n");
     let target_func = |x: f64, y: f64| -> f64 {
         f64::sin(x * x * consts::PI) - f64::cos(y * y * consts::PI - x) + x * x * y - y * y * x
     };
